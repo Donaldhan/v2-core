@@ -14,8 +14,10 @@ contract UniswapV2ERC20 is IUniswapV2ERC20 {
     mapping(address => mapping(address => uint)) public allowance;//账户允许者使用数量
 
     bytes32 public DOMAIN_SEPARATOR;
+    //定义PERMIT_TYPEHASH方法,这个方法会返回[EIP2612](EIP-2612: permit – 712-signed approvals)所规定的链下信息加密的类型
     // keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
     bytes32 public constant PERMIT_TYPEHASH = 0x6e71edae12b1b97f4d1f60370fef10105fa2faae0126114a169c64845d6126c9;
+    //定义nonces方法，这个方法会返回EIP2612所规定每次授权的信息中所携带的nonce值是多少，可以方式授权过程遭受到重放攻击
     mapping(address => uint) public nonces;//账户nonce
 
     event Approval(address indexed owner, address indexed spender, uint value);
@@ -24,8 +26,12 @@ contract UniswapV2ERC20 is IUniswapV2ERC20 {
     constructor() public {
         uint chainId;
         assembly {
+            // 内联汇编，获取链的标识
             chainId := chainid
         }
+        //https://eips.ethereum.org/EIPS/eip-712
+        //https://zhuanlan.zhihu.com/p/40596830
+        //定义DOMAIN_SEPARATOR方法，这个方法会返回[EIP712](EIP-712: Ethereum typed structured data hashing and signing)所规定的DOMAIN_SEPARATOR值
         DOMAIN_SEPARATOR = keccak256(
             abi.encode(
                 keccak256('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)'),
@@ -78,9 +84,18 @@ contract UniswapV2ERC20 is IUniswapV2ERC20 {
         _transfer(from, to, value);
         return true;
     }
-    // todo
+    // permit授权方法 该方法的参数具体含义可以查询[EIP2612](EIP-2612: permit – 712-signed approvals)中的定义。
+    // 零gas以太坊交易实现原理及源码:https://zhuanlan.zhihu.com/p/269226515
+    // https://github.com/Donaldhan/ERC20Permit
+    //通过链下签名授权实现更少 Gas 的 ERC20代币:https://zhuanlan.zhihu.com/p/268699937
+    //https://eips.ethereum.org/EIPS/eip-2612
+    // https://github.com/makerdao/dss/blob/master/src/dai.sol
+    // 用户线下签名，授权代理服务商线上授权（服务商需要线上数据验证，用户需要使用相同方法进行线上验证）
     function permit(address owner, address spender, uint value, uint deadline, uint8 v, bytes32 r, bytes32 s) external {
+        //大于当前时间戳
         require(deadline >= block.timestamp, 'UniswapV2: EXPIRED');
+        //abi.encodePacked(...) returns (bytes)：对给定参数执行 紧打包编码
+        //
         bytes32 digest = keccak256(
             abi.encodePacked(
                 '\x19\x01',
@@ -88,6 +103,7 @@ contract UniswapV2ERC20 is IUniswapV2ERC20 {
                 keccak256(abi.encode(PERMIT_TYPEHASH, owner, spender, value, nonces[owner]++, deadline))
             )
         );
+        //ecrecover(bytes32 hash, uint8 v, bytes32 r, bytes32 s) returns (address)：基于椭圆曲线签名找回与指定公钥关联的地址，发生错误的时候返回 0
         address recoveredAddress = ecrecover(digest, v, r, s);
         require(recoveredAddress != address(0) && recoveredAddress == owner, 'UniswapV2: INVALID_SIGNATURE');
         _approve(owner, spender, value);
