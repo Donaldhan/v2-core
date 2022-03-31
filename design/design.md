@@ -38,6 +38,9 @@ Uniswap会根据流动性提供者存入资金的数额发给他们一定数量�
 
 我们再来看一下合约实现
 # 合约实现
+整体架构如下
+
+![uniswap-v2-framwork](/image/uniswap/uniswap-v2-framwork.png)
 
 
 * uniswap-v2-core ：核心合约的实现； 
